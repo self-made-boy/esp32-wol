@@ -106,7 +106,7 @@ func authMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 		if apiKey == "" {
 			apiKey = r.URL.Query().Get("api_key")
 		}
-		
+
 		// 验证API密钥
 		if apiKey != API_KEY {
 			log.Printf("[认证失败] %s %s - 无效的API密钥: %s", r.Method, r.URL.Path, apiKey)
@@ -117,7 +117,7 @@ func authMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 			})
 			return
 		}
-		
+
 		// 认证通过，继续处理请求
 		handler(w, r)
 	}
@@ -127,23 +127,23 @@ func authMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 func loggingMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// 读取请求体
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
-		
+
 		// 记录请求
 		log.Printf("[请求] %s %s", r.Method, r.URL.Path)
 		if len(body) > 0 {
 			log.Printf("[请求体] %s", string(body))
 		}
-		
+
 		// 包装响应写入器
 		rw := newResponseWriter(w)
-		
+
 		// 调用处理函数
 		handler(rw, r)
-		
+
 		// 记录响应
 		duration := time.Since(start)
 		log.Printf("[响应] %d - %s (%v)", rw.statusCode, strings.TrimSpace(rw.body.String()), duration)
@@ -314,10 +314,34 @@ func pollWOLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 更新设备最后见到时间
+	// 检查设备是否存在，如果不存在则自动注册
 	storage.mu.Lock()
 	if device, exists := storage.devices[deviceID]; exists {
+		// 设备已存在，更新最后见到时间
 		device.LastSeen = time.Now()
+	} else {
+		// 设备不存在，自动注册
+		deviceName := r.URL.Query().Get("device_name")
+		deviceVersion := r.URL.Query().Get("device_version")
+		deviceDescription := r.URL.Query().Get("device_description")
+		
+		// 如果没有提供设备名称，使用设备ID作为名称
+		if deviceName == "" {
+			deviceName = "ESP32-" + deviceID
+		}
+		
+		// 创建新设备
+		newDevice := &Device{
+			ID:          deviceID,
+			Name:        deviceName,
+			MacAddress:  deviceID, // 使用deviceID作为MAC地址
+			Description: deviceDescription,
+			Version:     deviceVersion,
+			LastSeen:    time.Now(),
+		}
+		storage.devices[deviceID] = newDevice
+		
+		log.Printf("设备自动注册成功: %s (%s)", deviceName, deviceID)
 	}
 
 	// 获取待处理消息
@@ -344,7 +368,7 @@ func pollWOLHandler(w http.ResponseWriter, r *http.Request) {
 	storage.mu.Unlock()
 
 	// 长轮询：等待新消息
-	timeout := time.After(120 * time.Second) // 30秒超时
+	timeout := time.After(120 * time.Second)  // 30秒超时
 	ticker := time.NewTicker(1 * time.Second) // 每秒检查一次
 	defer ticker.Stop()
 
