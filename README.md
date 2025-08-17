@@ -25,6 +25,11 @@ go run main.go -port 8080
 
 ### 2. ESP32端配置
 
+安装 MircoPython 烧录到 ESP32 设备中：
+* 可以借助 Tonny 烧录，简单方便；
+* pycharm 中可以使用 MicroPython Tools (https://plugins.jetbrains.com/plugin/12220-micropython-tools) 插件进行开发调试；
+
+
 编辑 `src/esp32/config.py`：
 
 ```python
